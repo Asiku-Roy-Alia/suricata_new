@@ -1,0 +1,75 @@
+# =============================================================================
+# Hybrid IDS Configuration
+# =============================================================================
+
+paths:
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+  artifacts_dir: "artifacts"
+  results_dir: "results"
+  plots_dir: "results/plots"
+  loaco_dir: "results/loaco"
+  logs_dir: "results/logs"
+
+seed: 42
+
+data:
+  file_glob: "**/*.csv"
+  # Stratified sample of the full corpus before any class-balancing happens.
+  stratified_sample_fraction: 0.20
+  drop_duplicates: true
+  # Drop attack categories with fewer training samples than this threshold.
+  # Infiltration in CIC-IDS-2017 has only 36 rows after cleaning, which is
+  # too few for SMOTE to upsample meaningfully. The notebook drops it.
+  min_category_samples: 1500
+
+preprocessing:
+  test_size: 0.20
+  validation_size: 0.10
+  rfe_n_features: 30
+  pca_variance_retained: 0.95
+  # Class balancing: cap each class then upsample minorities with SMOTE.
+  # The cap protects training time; SMOTE then equalises classes at the cap.
+  enable_class_balancing: true
+  class_cap: 5000
+
+models:
+  # Linear SVM stays in the stack as a calibration anchor.
+  supervised_svc:
+    C_grid: [0.1, 1.0, 10.0]
+    class_weight: "balanced"
+    max_iter: 3000
+  # Random Forest replaces SVC as the primary supervised base learner because
+  # it handles non-linear separation between attack categories far better.
+  # n_estimators and max_depth follow the values that performed well in the
+  # reference notebook.
+  supervised_rf:
+    n_estimators: 400
+    max_depth: 40
+    min_samples_split: 2
+    min_samples_leaf: 1
+    n_jobs: -1
+  anomaly:
+    nu_grid: [0.05, 0.10, 0.20]
+    max_benign_rows: 80000
+  meta_learner:
+    C_grid: [0.1, 1.0, 10.0]
+    max_iter: 1000
+  isolation_forest:
+    n_estimators: 200
+    contamination: "auto"
+
+evaluation:
+  cv_folds: 5
+  primary_metric: "macro_f1"
+  report_reliability: true
+
+loaco:
+  enabled: true
+  attack_categories:
+    - "DoS"
+    - "DDoS"
+    - "PortScan"
+    - "Brute Force"
+    - "Web Attack"
+    - "Bot"

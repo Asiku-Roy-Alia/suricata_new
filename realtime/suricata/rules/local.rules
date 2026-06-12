@@ -1,0 +1,42 @@
+# ============================================================
+# Minimal local Suricata rules for the Hybrid IDS demonstration.
+#
+# These rules are enough to light up Suricata alerts on common
+# attack patterns present in the CIC-IDS-2017 PCAPs. They are NOT a
+# substitute for a production rule set. For real deployment, install
+# the Emerging Threats Open ruleset using suricata-update, which is
+# documented in operational/README.md.
+# ============================================================
+
+# --- ICMP test rule -------------------------------------------------
+alert icmp any any -> any any (msg:"LOCAL ICMP echo request seen"; itype:8; sid:1000001; rev:1;)
+
+# --- HTTP brute force / suspicious login ---------------------------
+alert http any any -> any any (msg:"LOCAL HTTP POST to login endpoint"; \
+  flow:to_server,established; http.method; content:"POST"; \
+  http.uri; content:"login"; nocase; sid:1000010; rev:1;)
+
+# --- SQL injection patterns -----------------------------------------
+alert http any any -> any any (msg:"LOCAL Possible SQL injection (UNION SELECT)"; \
+  flow:to_server,established; http.uri; content:"union"; nocase; \
+  content:"select"; nocase; distance:0; sid:1000020; rev:1;)
+
+alert http any any -> any any (msg:"LOCAL Possible SQL injection (single quote with OR)"; \
+  flow:to_server,established; http.uri; content:"%27"; \
+  content:"or"; nocase; distance:0; sid:1000021; rev:1;)
+
+# --- SSH brute-force heuristic --------------------------------------
+alert tcp any any -> any 22 (msg:"LOCAL SSH connection attempt"; \
+  flow:to_server,established; threshold:type both, track by_src, count 5, seconds 30; \
+  sid:1000030; rev:1;)
+
+# --- FTP brute force -----------------------------------------------
+alert tcp any any -> any 21 (msg:"LOCAL FTP authentication attempt"; \
+  flow:to_server,established; content:"USER"; nocase; \
+  threshold:type both, track by_src, count 5, seconds 30; \
+  sid:1000040; rev:1;)
+
+# --- Port scan heuristic --------------------------------------------
+alert tcp any any -> any any (msg:"LOCAL Possible TCP SYN scan"; \
+  flags:S; threshold:type both, track by_src, count 30, seconds 10; \
+  sid:1000050; rev:1;)

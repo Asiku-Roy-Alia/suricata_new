@@ -1,0 +1,73 @@
+# ============================================================
+# Hybrid IDS demonstration: Suricata + automatic PCAP generation
+#
+# Two services run sequentially:
+#
+#   1. pcap-generator  Generates a Friday-style synthetic PCAP at
+#                      pcaps/sample.pcap. Uses a small Python image
+#                      and the local generate_friday_pcap.py script.
+#                      Skips generation if sample.pcap already exists.
+#
+#   2. suricata        Reads pcaps/sample.pcap and writes EVE JSON to
+#                      logs/eve.json. Depends on the pcap-generator
+#                      completing successfully.
+#
+# Usage:
+#   docker compose up                       # runs both services in order
+#   docker compose up --abort-on-container-exit  # exits when done
+#   docker compose run --rm suricata        # re-run Suricata only
+# ============================================================
+
+services:
+  # ---------------------------------------------------------------
+  # Step 1: generate the synthetic PCAP
+  # ---------------------------------------------------------------
+  pcap-generator:
+    image: python:3.11-slim
+    container_name: hybrid-ids-pcap-gen
+    working_dir: /work
+    volumes:
+      - ./generate_friday_pcap.py:/work/generate_friday_pcap.py:ro
+      - ./pcaps:/pcaps
+    # If pcaps/sample.pcap already exists, skip regeneration. Otherwise
+    # generate it. The script has no third-party dependencies, so the
+    # plain python:3.11-slim image is sufficient.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -f /pcaps/sample.pcap ]; then
+          echo "PCAP already exists at /pcaps/sample.pcap, skipping generation."
+          ls -la /pcaps/sample.pcap
+        else
+          echo "Generating synthetic Friday-style PCAP..."
+          python /work/generate_friday_pcap.py /pcaps/sample.pcap
+        fi
+    restart: "no"
+
+  # ---------------------------------------------------------------
+  # Step 2: run Suricata against the generated PCAP
+  # ---------------------------------------------------------------
+  suricata:
+    image: jasonish/suricata:7.0
+    container_name: hybrid-ids-suricata
+    depends_on:
+      pcap-generator:
+        condition: service_completed_successfully
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+      - NET_RAW
+    volumes:
+      - ./suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./rules:/etc/suricata/rules:ro
+      - ./pcaps:/pcaps:ro
+      - ./logs:/var/log/suricata
+    command: >
+      suricata
+      -c /etc/suricata/suricata.yaml
+      -r /pcaps/sample.pcap
+      -l /var/log/suricata
+      --runmode=autofp
+      -k none
+    restart: "no"

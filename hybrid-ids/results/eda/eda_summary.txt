@@ -1,0 +1,31 @@
+Exploratory Data Analysis Summary
+==================================================
+
+Total rows:       446,338
+Total columns:    79
+Attack ratio:     0.1501
+
+Category counts:
+  BENIGN             379,334  (84.99%)
+  DoS                 38,751  ( 8.68%)
+  DDoS                25,603  ( 5.74%)
+  Brute Force          1,830  ( 0.41%)
+  Web Attack             429  ( 0.10%)
+  PortScan               391  ( 0.09%)
+
+Top 15 features by absolute correlation with attack label:
+  Bwd Packet Length Std                +0.7143
+  Bwd Packet Length Mean               +0.7054
+  Avg Bwd Segment Size                 +0.7054
+  Bwd Packet Length Max                +0.7021
+  Packet Length Std                    +0.6784
+  Max Packet Length                    +0.6578
+  Average Packet Size                  +0.6353
+  Packet Length Mean                   +0.6310
+  Packet Length Variance               +0.6194
+  Fwd IAT Std                          +0.5904
+  Idle Max                             +0.5589
+  Flow IAT Max                         +0.5560
+  Fwd IAT Max                          +0.5545
+  Idle Mean                            +0.5532
+  Idle Min                             +0.5382

@@ -1,0 +1,7 @@
+Leave-One-Attack-Category-Out experiment
+======================================================================
+DoS              novel_recall=0.0898  known_recall=0.9901  TNR=0.9918  macroF1=0.7853  MCC=0.6164
+DDoS             novel_recall=0.5001  known_recall=0.9687  TNR=0.9873  macroF1=0.9119  MCC=0.8271
+PortScan         novel_recall=0.1026  known_recall=0.9784  TNR=0.9876  macroF1=0.9719  MCC=0.9442
+Brute Force      novel_recall=0.0109  known_recall=0.9786  TNR=0.9880  macroF1=0.9662  MCC=0.9324
+Web Attack       novel_recall=0.0233  known_recall=0.9797  TNR=0.9887  macroF1=0.9738  MCC=0.9478

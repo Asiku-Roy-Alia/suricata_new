@@ -1,0 +1,113 @@
+%YAML 1.1
+---
+# =============================================================================
+# Suricata configuration for the hybrid IDS real-time demo.
+#
+# Differences from the batch (offline-pcap) configuration:
+#   * af-packet section configured with explicit thread count for dummy0
+#   * runmode workers (parallel decode)
+#   * stats output enabled at low frequency for the Kibana dashboard
+# =============================================================================
+
+vars:
+  address-groups:
+    HOME_NET: "[10.0.0.0/8,172.16.0.0/12,192.168.0.0/16]"
+    EXTERNAL_NET: "!$HOME_NET"
+    HTTP_SERVERS: "$HOME_NET"
+    SMTP_SERVERS: "$HOME_NET"
+    SQL_SERVERS: "$HOME_NET"
+    DNS_SERVERS: "$HOME_NET"
+    DC_SERVERS: "$HOME_NET"
+  port-groups:
+    HTTP_PORTS: "80"
+    SHELLCODE_PORTS: "!80"
+    ORACLE_PORTS: 1521
+    SSH_PORTS: 22
+    DNP3_PORTS: 20000
+    MODBUS_PORTS: 502
+    FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
+    FTP_PORTS: 21
+    GENEVE_PORTS: 6081
+    VXLAN_PORTS: 4789
+    TEREDO_PORTS: 3544
+
+default-rule-path: /etc/suricata/rules
+rule-files:
+  - local.rules
+
+default-log-dir: /var/log/suricata
+
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      community-id: yes
+      community-id-seed: 0
+      types:
+        - alert:
+            payload: yes
+            payload-buffer-size: 4kb
+            payload-printable: yes
+            packet: yes
+            metadata: yes
+            tagged-packets: yes
+        - http:
+            extended: yes
+        - dns:
+        - tls:
+            extended: yes
+        - flow
+        - netflow
+
+  - stats:
+      enabled: yes
+      filename: stats.log
+      interval: 30
+
+# pcap-file is configured via the command line: --pcap-file-continuous
+# watches a directory and processes new PCAPs as they appear.
+pcap-file:
+  checksum-checks: auto
+  delete-when-done: yes
+
+app-layer:
+  protocols:
+    tls:
+      enabled: yes
+    http:
+      enabled: yes
+    ssh:
+      enabled: yes
+    smtp:
+      enabled: yes
+    dns:
+      tcp:
+        enabled: yes
+      udp:
+        enabled: yes
+    ftp:
+      enabled: yes
+    smb:
+      enabled: yes
+
+flow:
+  memcap: 128mb
+  hash-size: 65536
+  prealloc: 10000
+
+stream:
+  memcap: 64mb
+  checksum-validation: yes
+  inline: auto
+  reassembly:
+    memcap: 256mb
+    depth: 1mb
+    toserver-chunk-size: 2560
+    toclient-chunk-size: 2560
+
+logging:
+  default-log-level: info
+  outputs:
+    - console:
+        enabled: yes
