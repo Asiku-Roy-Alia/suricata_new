@@ -1,4 +1,3 @@
-cat > ~/Hybrid-IDS-Project/hybrid-ids/src/features.py <<'PY'
 """Feature engineering pipeline.
 
 The pipeline performs scaling first, then Recursive Feature Elimination using
