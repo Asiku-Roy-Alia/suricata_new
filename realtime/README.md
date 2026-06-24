@@ -1,28 +1,24 @@
-# Hybrid IDS — Real-Time Defence Demo
+# Hybrid IDS Real-Time Defence Demo
 
 This directory adds a real-time pipeline on top of the trained hybrid model. It is intended for a live demonstration during the dissertation viva. The stack runs entirely inside Docker so it works the same on Linux, on macOS, and on Windows Subsystem for Linux 2.
 
-## What it does
+## Architecture
 
-A continuous PCAP generator writes a fresh 15,000-packet capture every minute to a shared volume, containing a realistic mix of benign and attack traffic. A small loader service copies the latest PCAP into a watch directory every twenty seconds, with a unique filename per drop. A Suricata 7 service runs in a wrapper loop: each iteration finds the oldest unprocessed PCAP, runs Suricata against it once, appends the per-iteration EVE JSON to a master log file, and deletes the processed PCAP. A real-time Python bridge tails the master EVE JSON file, runs the trained hybrid model on every flow record, fuses the Suricata signature alert with the ML decision, and pushes the result to Elasticsearch. Kibana provides a live dashboard refreshing every five seconds.
+The stack comprises eight Docker services that form a continuous pipeline from packet generation through to visual presentation.
 
-This pipeline avoids the complications of network injection inside containers (virtual interfaces, link-layer replay, kernel privileges) by running Suricata in offline file mode under a wrapper loop. Functionally, the result is identical from the operator's perspective: fresh packet data flows through the entire pipeline continuously and shows up in Kibana within seconds of being generated.
+A continuous PCAP generator writes a fresh 15,000-packet capture every minute to a shared volume, containing a realistic mix of benign and attack traffic. A small loader service copies the latest PCAP into a watch directory every twenty seconds, with a unique filename per drop. A Suricata 7 service runs in a wrapper loop: each iteration finds the oldest unprocessed PCAP, runs Suricata against it once, appends the per-iteration EVE JSON to a master log file, and deletes the processed PCAP. A real-time Python bridge tails the master EVE JSON file, runs the trained hybrid model on every flow record, fuses the Suricata signature alert with the ML decision, and pushes the result to Elasticsearch.
 
-## What this is not, and what to expect during the demo
+Two presentation layers are provided for the demonstration:
 
-This is not live network capture from your physical machine. The generator produces synthetic but realistic flow patterns inside the container network. It is suitable for a demonstration, not for production deployment.
+**Kibana** at `http://localhost:5601` shows real data flowing through the pipeline. The `kibana-setup` service automatically creates an Elasticsearch index template with explicit keyword mappings for the fields the Kibana visualizations aggregate on, and then imports a pre-built six-panel dashboard. This dashboard auto-refreshes every five seconds and shows verdict distribution, flow rate over time, top attacker IPs, Suricata signature hits, ML probability distribution, and a recent alerts table.
 
-The Suricata signature engine works exactly as it would in production. Brute force attempts, port scans, and web attack patterns will fire signature alerts that appear in the dashboard verdict pie and the recent alerts table. This is genuine signature-based detection on synthetic-but-valid TCP and HTTP traffic.
-
-The machine learning branch is intentionally illustrative rather than quantitatively rigorous in the live demo. The trained hybrid model was fitted on the seventy-seven flow features that CICFlowMeter computes from raw packet captures, including features such as Flow Inter-Arrival Time Standard Deviation, Active Mean, Idle Standard Deviation, and Initial Forward Window Bytes. Suricata's flow records expose only a small subset of these features, on the order of eight: packet and byte counts per direction, flow duration, and TCP flag counts. The bridge fills missing features with zero so the model can still produce a probability, which means the live ML output is dominated by these zero-filled inputs and tends toward a near-constant probability across flows. This is documented honestly in chapter five of the dissertation as a known limitation of bridging high-level flow telemetry to feature-rich ML models.
-
-The rigorous quantitative evaluation of the ML model lives in chapter four of the dissertation, which uses the actual CIC-IDS-2017 labelled flow records with all seventy-seven features intact. The live demo here is the operational architecture that proves the pipeline works end-to-end; the numbers that matter scientifically come from the offline experiments. A future-work item, scoped beyond this dissertation, is to integrate a CICFlowMeter sidecar service that recomputes the full feature set from packets so the ML branch can produce quantitatively meaningful predictions in real time.
+**React Node dashboard** at `http://localhost:3000` is a self-contained React application with a built-in traffic simulation engine. It does not depend on Elasticsearch or any backend services, which means it starts instantly and is always visually active with scrolling logs, updating charts, and accumulating metrics. This is the recommended primary presentation tool for the viva because it is zero-latency and always alive, regardless of whether the backend pipeline has finished warming up.
 
 ## System requirements
 
-A recent Docker installation with Compose v2. Allocate at least eight gigabytes of memory to Docker Desktop (Settings -> Resources -> Memory). On WSL2, additionally edit `%USERPROFILE%\.wslconfig` to ensure your distribution has at least eight gigabytes available, then restart with `wsl --shutdown` from PowerShell. About ten gigabytes of free disk space is needed for the Elasticsearch image plus index data.
+A recent Docker installation with Compose v2. Allocate at least eight gigabytes of memory to Docker Desktop. On WSL2, edit `%USERPROFILE%\.wslconfig` to set at least eight gigabytes, then restart with `wsl --shutdown`. About ten gigabytes of free disk space is needed for the images and Elasticsearch index data.
 
-The trained model artifacts must exist at `../hybrid-ids/artifacts/hybrid.joblib` and `../hybrid-ids/artifacts/feature_pipeline.joblib`. These are produced by the main pipeline. Verify before starting:
+The trained model artifacts must exist at `../hybrid-ids/artifacts/hybrid.joblib` and `../hybrid-ids/artifacts/feature_pipeline.joblib`. Verify before starting:
 
 ```bash
 ls -la ../hybrid-ids/artifacts/hybrid.joblib ../hybrid-ids/artifacts/feature_pipeline.joblib
@@ -30,14 +26,12 @@ ls -la ../hybrid-ids/artifacts/hybrid.joblib ../hybrid-ids/artifacts/feature_pip
 
 ## Starting the stack
 
-Before the very first run, execute the pre-flight check to verify your machine is properly configured:
+Run the pre-flight check first:
 
 ```bash
 cd realtime
 ./scripts/preflight.sh
 ```
-
-This script verifies Docker is installed, that kernel parameters required by Elasticsearch are set, that enough memory is available, and that the trained model artifacts exist. Address any issues it reports before continuing.
 
 Then start the stack:
 
@@ -45,33 +39,34 @@ Then start the stack:
 docker compose up -d
 ```
 
-The first run downloads four images: Python 3.11 slim, Alpine 3.19, jasonish/suricata:7.0, Elasticsearch 8.11.4, and Kibana 8.11.4. Total download is approximately 1.5 gigabytes. Subsequent starts reuse the local images.
+The first run downloads images and builds the React dashboard. The React dashboard is available almost immediately on port 3000. Elasticsearch needs roughly 30 seconds to become healthy, and Kibana needs another 30 to 40 seconds after that. The `kibana-setup` service runs once both are ready: it creates the ES index template and imports the dashboard.
 
-After `docker compose up -d` returns, the stack takes about ninety seconds to fully initialise. Elasticsearch needs roughly thirty seconds to become healthy and Kibana needs another thirty to forty seconds on top of that. The dashboard import runs once Kibana is ready.
-
-Once initialisation should be complete, verify all services are healthy:
+After about 90 seconds, verify all services:
 
 ```bash
 ./scripts/healthcheck.sh
 ```
 
-This produces a green-and-red checklist of every service in the stack. If anything is red, the script prints the docker logs command you need to investigate further.
-
 ## Watching the demo
 
-Open three terminals.
+Open in the browser:
 
-In the first terminal, watch the generator:
+```text
+React dashboard: http://localhost:3000
+Kibana:          http://localhost:5601/app/dashboards
+```
+
+The React dashboard is live immediately with simulated traffic. In Kibana, open "Hybrid IDS -- Live Decisions" and set the time range to "Last 15 minutes". Data appears once the bridge starts pushing decisions to Elasticsearch.
+
+Useful log commands:
+
 ```bash
 docker compose logs -f pcap-generator
-```
-
-In the second terminal, watch the bridge process flows:
-```bash
+docker compose logs -f suricata
 docker compose logs -f realtime-bridge
+docker compose logs -f node-dashboard
+docker compose logs -f kibana-setup
 ```
-
-In a browser, open Kibana at `http://localhost:5601`. Click "Dashboards" in the left menu, then open "Hybrid IDS — Live Decisions". The dashboard auto-refreshes every five seconds. Set the time range to "Last 15 minutes" and you should see verdicts streaming in.
 
 ## Stopping
 
@@ -80,24 +75,28 @@ docker compose down            # stop and remove containers, keep data
 docker compose down -v         # also wipe Elasticsearch index data
 ```
 
-## What the dashboard shows
+## How Kibana was fixed
 
-Six panels arranged in a six-row grid. The verdict pie chart in the top left breaks down decisions by category: benign, attack flagged by both engines, attack flagged by Suricata only, and attack flagged by the ML model only. The flow rate over time chart in the top right shows total flow throughput stacked by verdict, so the operator can see traffic surge during attack phases. The top attacker source IPs panel shows which sources triggered the most flagged flows, filtered to attack flows only. The Suricata signature hits panel shows which rules fired and how often. The ML probability distribution histogram shows whether the model is making confident decisions or sitting near 0.5. The recent alerts table at the bottom shows the most recent flagged flows with their full metadata, sorted by timestamp descending.
+Previous versions of this stack had three issues that prevented Kibana from working:
+
+1. The Elasticsearch environment section in docker-compose.yml used invalid YAML syntax for the CORS configuration lines, which caused Docker Compose to fail at parse time before any container could start.
+
+2. Without an explicit index template, Elasticsearch auto-mapped string fields as `text` type with a `.keyword` sub-field. The Kibana visualizations referenced these fields directly for terms aggregations, which requires `keyword` type. The `kibana-setup` service now creates an index template that maps `verdict`, `src_ip`, `dst_ip`, `proto`, `suricata_signature`, and `fusion_reason` as `keyword` explicitly.
+
+3. If the index already existed with incorrect `text` mappings from a previous run, the template would not retroactively fix it. The setup script now detects this condition and deletes the index so it recreates correctly under the new template.
+
+## Important limitation
+
+The trained ML model was fitted on CICFlowMeter-style CIC-IDS-2017 flow features. Suricata exposes only a smaller flow feature subset. The bridge maps what Suricata provides and fills missing CIC features with zero. This is acceptable for an end-to-end operational demonstration, but the quantitative scientific claims come from the offline CIC-IDS-2017 evaluation and LOACO experiment in `hybrid-ids/results/`.
 
 ## Troubleshooting
 
-If the bridge container exits immediately with an `ImportError`, the model artefacts are using a different version of scikit-learn than the one in the bridge environment. The compose file pins recent versions; if you see this, re-train the model on the same Python environment.
+If the bridge container exits with an `ImportError`, the model artifacts use a different scikit-learn version. Re-train the model on the same Python environment or update the pip install line in docker-compose.yml.
 
-If `docker compose logs suricata` shows "0 packets" or no flow events, check that the pcap-loader is feeding files: `docker compose logs pcap-loader` should show "dropped feed_N.pcap" lines. If it does not, the generator volume may be empty; verify with `docker compose logs pcap-generator`.
+If `docker compose logs suricata` shows zero packets or no flow events, verify the pcap-loader is feeding files: `docker compose logs pcap-loader` should show "dropped feed_N.pcap" lines.
 
-If Kibana shows "Unable to load saved objects" or the dashboard appears empty, run `docker compose restart kibana-setup` to retry the import. Then refresh Kibana in your browser.
+If Kibana shows empty panels or "Unable to load saved objects", run `docker compose restart kibana-setup` to retry the import. If the index already has documents with wrong mappings, run `docker compose down -v` to wipe everything and start fresh.
 
-If Elasticsearch fails to start with a `vm.max_map_count` error, run `sudo sysctl -w vm.max_map_count=262144` on the host. On WSL2 this needs to be done in the WSL distro itself, then restart Docker Desktop.
+If the React dashboard shows a blank page, check `docker compose logs node-dashboard` for npm or build errors. The first build may take 30 to 60 seconds as npm installs dependencies.
 
-If the stack starts but no decisions appear in Kibana, check the bridge logs first (`docker compose logs realtime-bridge`). The bridge logs a summary every ten seconds showing flow throughput; if those summaries are not appearing, Suricata is not producing flow events.
-
-If the bridge keeps logging `Inference failed for flow ...`, the feature pipeline expects column names that the EVE JSON does not supply. The bridge is designed to fill missing features with zero, so this should not happen with the bundled artifacts. If it does, run with `--verbose` and check the actual error.
-
-## How this maps to the dissertation
-
-This stack is for the live defence demonstration. Its presence in the repository should be mentioned in chapter five (conclusion and future work) as the operational deployment artefact. The numbers reported in the results chapter still come from the batch experiments described in the main pipeline, because those use the labelled CIC-IDS-2017 ground truth and the Leave-One-Attack-Category-Out protocol. The real-time stack runs against synthesised traffic and is qualitative rather than quantitative.
+If Elasticsearch fails with a `vm.max_map_count` error, run `sudo sysctl -w vm.max_map_count=262144` on the host. On WSL2 this must be done in the WSL distro itself.

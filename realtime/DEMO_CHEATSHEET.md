@@ -14,7 +14,7 @@ sleep 90                  # give the stack time to settle
 ./scripts/healthcheck.sh  # verify every service is green
 ```
 
-If `healthcheck.sh` shows everything green, open Kibana at `http://localhost:5601` in your browser and navigate to Dashboards, then "Hybrid IDS - Live Decisions". Confirm verdicts are appearing. Set the time picker to "Last 15 minutes" with auto-refresh every 5 seconds.
+If `healthcheck.sh` shows everything green, open the React dashboard at `http://localhost:3000` and Kibana at `http://localhost:5601` in your browser. The React dashboard is live immediately with simulated traffic. In Kibana, navigate to Dashboards, then "Hybrid IDS - Live Decisions". Confirm verdicts are appearing. Set the time picker to "Last 15 minutes" with auto-refresh every 5 seconds.
 
 If anything is red, address it before the viva starts.
 
@@ -22,9 +22,11 @@ If anything is red, address it before the viva starts.
 
 Have three windows arranged on screen.
 
-The first window is the Kibana dashboard at `http://localhost:5601/app/dashboards`. This is the centrepiece. Point out the verdict pie chart updating in real time, the flow rate timeline showing benign and attack traffic, and the recent alerts table populating with new flagged flows.
+The first window is the React dashboard at `http://localhost:3000`. This is the primary presentation tool because it is always live with simulated traffic, regardless of whether the backend pipeline has finished warming up. Point out the scrolling flow monitor and alert stream in the Live Feed tab, the updating charts in the Analytics tab, and the ML probability scatter in the Model Insight tab. The simulation engine is configurable from the sidebar: adjust the attack rate, ML threshold, and refresh speed to show how the system responds to changing threat conditions.
 
-The second window is a terminal showing the bridge log. This is your evidence that the ML model is actively running on every flow:
+The second window is the Kibana dashboard at `http://localhost:5601/app/dashboards`. This shows real data from the pipeline, proving that the trained model is running against Suricata output. Point out the verdict pie chart, the flow rate timeline, and the recent alerts table with live data from the bridge.
+
+The third window is a terminal showing the bridge log. This is the evidence that the ML model is actively running on every flow:
 
 ```bash
 docker compose logs -f realtime-bridge
@@ -42,7 +44,9 @@ The lines reading `[suricata] processing /pcap-watch/feed_NN.pcap` and `[suricat
 
 ## What to say while the demo runs
 
-The dashboard is showing live decisions on traffic generated inside the container. The Suricata signature engine on the right side of the verdict pie shows alerts firing on actual attack patterns: brute force, port scans, web attacks. These are the signature-based detections you would get from a production Suricata deployment. The ML model on the other branch of the verdict pie shows the hybrid stacked classifier from chapter four producing probability scores on every flow record. The fused decision combines both engines, so a flow flagged by either is treated as suspicious.
+The React dashboard is showing a live simulation of the hybrid intrusion detection system with realistic network traffic patterns. The flow monitor shows individual packet decisions streaming through the fusion engine, with each flow classified by both the Suricata signature engine and the stacked ML model. The alert stream isolates confirmed attacks.
+
+Switching to the Kibana dashboard, this shows real decisions from the actual pipeline running inside Docker. The Suricata signature engine fires alerts on actual attack patterns including brute force, port scans, and web attacks. These are the same signatures you would see in a production Suricata deployment. The ML model on the other branch produces probability scores on every flow record. The fused decision combines both engines, so a flow flagged by either is treated as suspicious.
 
 The rigorous quantitative evaluation of the model is in chapter four, using the labelled CIC-IDS-2017 ground truth. What you are seeing now is the operational architecture: how the trained model would be deployed in a live SOC environment.
 
@@ -65,7 +69,7 @@ sleep 60
 ./scripts/healthcheck.sh
 ```
 
-If you have time pressure and the live stack is not cooperating, you can fall back to the static screenshots of the dashboard saved in `dissertation/figures/` and present those instead. The dissertation does not depend on the live demo.
+If you have time pressure and the backend pipeline is not cooperating, the React dashboard at `http://localhost:3000` is always available as a standalone presentation tool with its built-in simulation engine. It does not depend on Elasticsearch or any backend service. The dissertation does not depend on the live demo.
 
 ## After the viva
 

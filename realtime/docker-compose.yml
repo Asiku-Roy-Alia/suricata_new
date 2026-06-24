@@ -1,34 +1,29 @@
 # =============================================================================
-# Hybrid IDS — Real-Time Defence Demo Stack
+# Hybrid IDS Real-Time Defence Demo Stack
 #
-# This compose file orchestrates a live demonstration of the hybrid IDS:
-#
+# Services:
 #   1. pcap-generator    Continuously regenerates a 15,000-packet PCAP file
 #                        with realistic CIC-IDS-2017-style traffic mix.
-#   2. tcpreplay         Replays the latest PCAP onto a Linux dummy interface
-#                        in an infinite loop.
-#   3. suricata          Captures live from that interface, emits EVE JSON.
-#   4. realtime-bridge   Tails EVE JSON, runs the trained ML model, fuses
-#                        decisions, pushes results to Elasticsearch.
+#   2. suricata          Captures from offline PCAP in a wrapper loop.
+#   3. pcap-loader       Cycles fresh PCAPs into Suricata's watch directory.
+#   4. realtime-bridge   Tails EVE JSON, runs hybrid ML model, pushes to ES.
 #   5. elasticsearch     Stores decision documents.
 #   6. kibana            Interactive Elastic dashboard.
-#   7. node-dashboard    React dashboard backed by Elasticsearch.
-#   8. kibana-setup      One-shot service that imports the dashboard.
+#   7. kibana-setup      One-shot: creates ES index template, imports dashboard.
+#   8. node-dashboard    React dashboard with built-in traffic simulation.
 #
-# All inter-service communication uses a private Docker network. The only
-# ports exposed to the host are Kibana on 5601, Elasticsearch on 9200, and the React dashboard on 3000.
-#
-# Resource expectations: ~6-8 GB RAM, ~10 GB disk. Start with at least
-# 8 GB of memory allocated to Docker Desktop / WSL.
+# Ports exposed to the host:
+#   - 5601  Kibana
+#   - 9200  Elasticsearch
+#   - 3000  React Node dashboard
 #
 # Usage:
-#   docker compose up -d                         # start everything
-#   docker compose logs -f realtime-bridge       # watch ML decisions stream
-#   docker compose logs -f pcap-generator        # watch PCAP regeneration
-#   open http://localhost:5601/app/dashboards    # view Kibana
-#   open http://localhost:3000                    # view React dashboard
-#   docker compose down                          # stop and remove everything
-#   docker compose down -v                       # also wipe Elasticsearch data
+#   docker compose up -d
+#   docker compose logs -f realtime-bridge
+#   open http://localhost:5601/app/dashboards
+#   open http://localhost:3000
+#   docker compose down
+#   docker compose down -v
 # =============================================================================
 
 services:
@@ -52,19 +47,6 @@ services:
 
   # ---------------------------------------------------------------
   # 2. Suricata: looped offline-pcap analysis
-  #
-  # We run Suricata in a wrapper loop rather than relying on
-  # --pcap-file-continuous, which has subtle timing quirks. Each
-  # iteration:
-  #   1. Wait for a fresh PCAP from the loader.
-  #   2. Run Suricata against it once. EVE JSON is appended in the
-  #      append mode the config sets up.
-  #   3. Move the processed PCAP aside and loop.
-  #
-  # This produces a steady stream of new EVE JSON events for the
-  # bridge to consume, with the trade-off that each iteration starts
-  # cold (no cross-iteration TCP state). For demo purposes this is
-  # fine because each PCAP is self-contained.
   # ---------------------------------------------------------------
   suricata:
     image: jasonish/suricata:7.0
@@ -86,23 +68,15 @@ services:
       - -c
       - |
         echo "[suricata] starting wrapper loop"
-        # Master eve.json file that accumulates events across iterations.
-        # Suricata writes to /var/log/suricata/eve.json with truncate
-        # semantics on each invocation, so we cat it onto a master file
-        # after each iteration, then clear it.
-        # NOTE: dollar signs are doubled ($$) to prevent docker-compose
-        # from interpreting them as Compose-level variable substitutions.
         MASTER=/var/log/suricata/eve.json
         > "$$MASTER"
         while true; do
-          # Find the oldest unprocessed pcap
           PCAP=$$(ls -tr /pcap-watch/feed_*.pcap 2>/dev/null | head -1)
           if [ -z "$$PCAP" ]; then
             sleep 2
             continue
           fi
           echo "[suricata] processing $$PCAP"
-          # Run Suricata writing to a per-iteration directory
           mkdir -p /tmp/sr-iter
           rm -f /tmp/sr-iter/*.json
           suricata -c /etc/suricata/suricata.yaml \
@@ -110,7 +84,6 @@ services:
             -l /tmp/sr-iter \
             --runmode=autofp \
             -k none > /tmp/sr-iter.stdout 2>&1 || true
-          # Append per-iteration eve.json to the master file
           if [ -f /tmp/sr-iter/eve.json ]; then
             cat /tmp/sr-iter/eve.json >> "$$MASTER"
             echo "[suricata] appended $$(wc -l < /tmp/sr-iter/eve.json) events to master eve.json"
@@ -120,17 +93,7 @@ services:
         done
 
   # ---------------------------------------------------------------
-  # 3. PCAP loader: cycles fresh PCAPs into Suricata's watch directory
-  #
-  # Every iteration:
-  #   * waits for /pcaps/live.pcap to be ready,
-  #   * copies it into /pcap-watch with a unique name,
-  #   * Suricata picks it up, processes it, then deletes it
-  #     (because of --pcap-file-delete).
-  #
-  # The cadence determines how often Suricata gets fresh data; a
-  # shorter interval means a more "live" feeling demo at the cost of
-  # CPU.
+  # 3. PCAP loader
   # ---------------------------------------------------------------
   pcap-loader:
     image: alpine:3.19
@@ -160,17 +123,14 @@ services:
 
   # ---------------------------------------------------------------
   # 4. Real-time ML bridge
-  #
-  # Loads the hybrid model, tails Suricata's eve.json, runs inference,
-  # writes decisions to Elasticsearch.
   # ---------------------------------------------------------------
   realtime-bridge:
     image: python:3.11-slim
     container_name: hybrid-bridge
     restart: unless-stopped
     depends_on:
-      - suricata
-      - elasticsearch
+      elasticsearch:
+        condition: service_healthy
     working_dir: /work
     environment:
       ES_URL: "http://elasticsearch:9200"
@@ -193,6 +153,7 @@ services:
           --model /hybrid-ids/artifacts/hybrid.joblib \
           --csv-tail /data/decisions_tail.csv
       '
+
   # ---------------------------------------------------------------
   # 5. Elasticsearch
   # ---------------------------------------------------------------
@@ -201,15 +162,11 @@ services:
     container_name: hybrid-elasticsearch
     restart: unless-stopped
     environment:
-      discovery.type: single-node
-      xpack.security.enabled: "false"
-      xpack.security.enrollment.enabled: "false"
-      bootstrap.memory_lock: "false"
-      http.cors.enabled=true
-      http.cors.allow-origin=http://localhost:3000
-      http.cors.allow-methods=OPTIONS,HEAD,GET,POST,PUT,DELETE
-      http.cors.allow-headers=X-Requested-With,Content-Type,Content-Length,Authorization
-      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      - "discovery.type=single-node"
+      - "xpack.security.enabled=false"
+      - "xpack.security.enrollment.enabled=false"
+      - "bootstrap.memory_lock=false"
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     mem_limit: 1400m
     ulimits:
       nofile:
@@ -225,6 +182,7 @@ services:
       timeout: 10s
       retries: 20
       start_period: 60s
+
   # ---------------------------------------------------------------
   # 6. Kibana
   # ---------------------------------------------------------------
@@ -241,56 +199,50 @@ services:
       NODE_OPTIONS: "--max-old-space-size=384"
     mem_limit: 900m
     ports:
-      - "127.0.0.1:5601:5601" 
-  # ---------------------------------------------------------------
-  # 7. React Node dashboard
-  # ---------------------------------------------------------------
-  node-dashboard:
-    image: node:20-alpine
-    container_name: hybrid-node-dashboard
-    restart: unless-stopped
-    depends_on:
-      - elasticsearch
-    working_dir: /app
-    environment:
-      HOST: "0.0.0.0"
-      PORT: "3000"
-      WATCHPACK_POLLING: "true"
-      REACT_APP_ES_INDEX: "hybrid-ids-decisions"
-    volumes:
-      - ./node_dashboard:/app
-    ports:
-      - "3000:3000"
-    command: |
-      sh -c '
-        set -e
-        npm ci
-        npm start
-      '
+      - "127.0.0.1:5601:5601"
 
   # ---------------------------------------------------------------
-  # 8. Kibana setup: imports the dashboard, then exits
+  # 7. Kibana setup: creates ES index template, imports dashboard
   # ---------------------------------------------------------------
   kibana-setup:
     image: alpine/curl:8.5.0
     container_name: hybrid-kibana-setup
     depends_on:
-      - kibana
+      elasticsearch:
+        condition: service_healthy
+      kibana:
+        condition: service_started
     volumes:
       - ./kibana:/dashboard:ro
     environment:
+      ES_URL: "http://elasticsearch:9200"
       KIBANA_URL: "http://kibana:5601"
     entrypoint:
       - sh
       - /dashboard/setup.sh
     restart: "no"
 
+  # ---------------------------------------------------------------
+  # 8. React Node dashboard (built-in simulation, no ES needed)
+  # ---------------------------------------------------------------
+  node-dashboard:
+    build:
+      context: ./node_dashboard
+      dockerfile: Dockerfile
+    container_name: hybrid-node-dashboard
+    restart: unless-stopped
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+
 # ---------------------------------------------------------------
 # Volumes
 # ---------------------------------------------------------------
 volumes:
-  pcaps:           # PCAPs from generator -> tcpreplay
-  pcap-watch:      # pcap-loader -> suricata watch directory
-  suricata-logs:   # eve.json from Suricata -> bridge
-  bridge-data:     # CSV tail and any local bridge state
-  es-data:         # Elasticsearch index data
+  pcaps:
+  pcap-watch:
+  suricata-logs:
+  bridge-data:
+  es-data:

@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Realtime stack health check (improved April 2026)
-# Now correctly reports green when Suricata is appending events and the
-# bridge is actively processing flows + pushing to Elasticsearch.
+# Realtime stack health check
 # ============================================================================
 set -u
 
@@ -64,8 +62,6 @@ if echo "$SU_LOG" | grep -q "starting wrapper loop\|appended .* events\|Engine s
     if [ "$PROCESSED" -gt 0 ]; then
         ok "Suricata has processed $PROCESSED PCAPs in the recent log window"
     fi
-
-    # No more flaky "empty eve.json" check — the appended events line is definitive
 else
     fail "Suricata wrapper loop has not started"
 fi
@@ -89,6 +85,14 @@ if echo "$ES_HEALTH" | grep -q '"status":"green"\|"status":"yellow"'; then
     ok "Elasticsearch cluster: $(echo "$ES_HEALTH" | grep -o '"status":"[^"]*"' | head -1)"
 else
     fail "Elasticsearch is not reachable on http://localhost:9200 (waited 50s)"
+fi
+
+# Check index template
+TMPL=$(curl -sS --max-time 5 "http://localhost:9200/_index_template/hybrid-ids-template" 2>/dev/null || true)
+if echo "$TMPL" | grep -q '"hybrid-ids-template"'; then
+    ok "index template 'hybrid-ids-template' exists (keyword mappings active)"
+else
+    fail "index template not found (kibana-setup may not have run yet)"
 fi
 
 DOC_COUNT=$(curl -sS --max-time 5 "http://localhost:9200/hybrid-ids-decisions/_count" 2>/dev/null | \
@@ -140,7 +144,6 @@ else
     fail "Kibana is not yet available (waited ~90s; check 'docker compose logs kibana')"
 fi
 
-
 echo
 echo "8. React Node dashboard"
 echo "======================="
@@ -156,6 +159,6 @@ if [ "$ANY_FAIL" = "1" ]; then
     echo -e "\033[31mSome checks failed.\033[0m See README.md troubleshooting section."
     exit 1
 else
-    echo -e "\033[32mAll checks passed.\033[0m The demo is live! 🚀"
+    echo -e "\033[32mAll checks passed.\033[0m The demo is live!"
     exit 0
 fi

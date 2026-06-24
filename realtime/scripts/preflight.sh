@@ -118,7 +118,7 @@ echo
 echo "5. Port availability"
 echo "--------------------"
 # Different OSes have different ways to check listening ports.
-for PORT in 5601 9200 3000; do
+for PORT in 9200 5601 3000; do
     IN_USE=""
     if command -v ss >/dev/null 2>&1; then
         if ss -tln 2>/dev/null | grep -q ":${PORT} "; then
