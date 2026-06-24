@@ -1,6 +1,6 @@
 # Hybrid IDS: Final Results Report
 
-_Generated 2026-04-25 12:14:18_
+_Generated 2026-06-16 20:30:44_
 
 
 ## 1. Dataset Preparation
@@ -120,21 +120,21 @@ Category counts:
   PortScan               391  ( 0.09%)
 
 Top 15 features by absolute correlation with attack label:
-  Bwd Packet Length Std                +0.7134
-  Bwd Packet Length Mean               +0.7039
-  Avg Bwd Segment Size                 +0.7039
-  Bwd Packet Length Max                +0.7009
-  Packet Length Std                    +0.6770
-  Max Packet Length                    +0.6565
-  Average Packet Size                  +0.6334
-  Packet Length Mean                   +0.6291
-  Packet Length Variance               +0.6186
-  Fwd IAT Std                          +0.5912
-  Idle Max                             +0.5593
-  Flow IAT Max                         +0.5564
-  Fwd IAT Max                          +0.5549
-  Idle Mean                            +0.5534
-  Idle Min                             +0.5381
+  Bwd Packet Length Std                +0.7143
+  Bwd Packet Length Mean               +0.7054
+  Avg Bwd Segment Size                 +0.7054
+  Bwd Packet Length Max                +0.7021
+  Packet Length Std                    +0.6784
+  Max Packet Length                    +0.6578
+  Average Packet Size                  +0.6353
+  Packet Length Mean                   +0.6310
+  Packet Length Variance               +0.6194
+  Fwd IAT Std                          +0.5904
+  Idle Max                             +0.5589
+  Flow IAT Max                         +0.5560
+  Fwd IAT Max                          +0.5545
+  Idle Mean                            +0.5532
+  Idle Min                             +0.5382
 
 ```
 
@@ -154,8 +154,8 @@ EDA artefacts written to `results/eda/`:
 ```
 Input features: 77
 RFE retained:   30
-PCA components: 10
-PCA variance retained: 0.9509
+PCA components: 9
+PCA variance retained: 0.9526
 
 RFE-selected features:
 Flow Duration
@@ -166,6 +166,7 @@ Fwd Packet Length Std
 Bwd Packet Length Max
 Bwd Packet Length Min
 Bwd Packet Length Mean
+Bwd Packet Length Std
 Flow IAT Std
 Flow IAT Max
 Flow IAT Min
@@ -174,10 +175,9 @@ Fwd IAT Mean
 Fwd IAT Std
 Fwd IAT Max
 Fwd IAT Min
-Bwd Packets/s
 Max Packet Length
+Packet Length Std
 Packet Length Variance
-Average Packet Size
 Avg Bwd Segment Size
 Subflow Fwd Packets
 Subflow Bwd Bytes
@@ -197,21 +197,21 @@ Idle Min
 
 | model           |   macro_f1 |    mcc |   accuracy |   precision |   recall |   false_positive_rate |   false_negative_rate |   roc_auc |    ece |    tp |    fp |    tn |   fn |
 |:----------------|-----------:|-------:|-----------:|------------:|---------:|----------------------:|----------------------:|----------:|-------:|------:|------:|------:|-----:|
-| LinearSVC       |     0.4904 | 0.3076 |     0.5151 |      0.2343 |   0.9834 |                0.5677 |                0.0166 |    0.9338 | 0.4644 | 13179 | 43067 | 32800 |  222 |
-| IsolationForest |     0.8005 | 0.6043 |     0.891  |      0.6167 |   0.7242 |                0.0795 |                0.2758 |    0.8397 | 0.0959 |  9705 |  6031 | 69836 | 3696 |
-| HybridStack     |     0.9707 | 0.9422 |     0.9846 |      0.9197 |   0.9835 |                0.0152 |                0.0165 |    0.9981 | 0.0136 | 13180 |  1150 | 74717 |  221 |
+| LinearSVC       |     0.4173 | 0.2498 |     0.4273 |      0.206  |   0.9858 |                0.6713 |                0.0142 |    0.9363 | 0.5134 | 13211 | 50932 | 24935 |  190 |
+| IsolationForest |     0.7966 | 0.5983 |     0.887  |      0.6011 |   0.7343 |                0.0861 |                0.2657 |    0.8417 | 0.0883 |  9840 |  6530 | 69337 | 3561 |
+| HybridStack     |     0.9764 | 0.9531 |     0.9878 |      0.9404 |   0.9806 |                0.011  |                0.0194 |    0.9986 | 0.0118 | 13141 |   833 | 75034 |  260 |
 
 
 ### 4.2 Per-category recall
 
 | category    |   HybridStack |   IsolationForest |   LinearSVC |
 |:------------|--------------:|------------------:|------------:|
-| BENIGN      |        0.9848 |            0.9205 |      0.4323 |
-| Brute Force |        0.9836 |            0      |      1      |
-| DDoS        |        0.9986 |            0.6132 |      0.9996 |
-| DoS         |        0.9743 |            0.8454 |      0.9721 |
-| PortScan    |        0.9615 |            0.1667 |      1      |
-| Web Attack  |        0.9302 |            0      |      0.9535 |
+| BENIGN      |        0.989  |            0.9139 |      0.3287 |
+| Brute Force |        0.9809 |            0      |      1      |
+| DDoS        |        0.9963 |            0.6227 |      0.9998 |
+| DoS         |        0.9705 |            0.8574 |      0.9756 |
+| PortScan    |        0.9872 |            0.0769 |      1      |
+| Web Attack  |        0.9535 |            0      |      1      |
 
 
 ### 4.3 Confusion matrices
@@ -220,18 +220,18 @@ Idle Min
 
 LinearSVC
                 pred_BENIGN  pred_ATTACK
-true_BENIGN            32800       43067
-true_ATTACK              222       13179
+true_BENIGN            24935       50932
+true_ATTACK              190       13211
 
 IsolationForest
                 pred_BENIGN  pred_ATTACK
-true_BENIGN            69836        6031
-true_ATTACK             3696        9705
+true_BENIGN            69337        6530
+true_ATTACK             3561        9840
 
 HybridStack
                 pred_BENIGN  pred_ATTACK
-true_BENIGN            74717        1150
-true_ATTACK              221       13180
+true_BENIGN            75034         833
+true_ATTACK              260       13141
 
 ```
 
@@ -242,18 +242,18 @@ Each row below represents a full retraining run in which the named attack catego
 
 | held_out_category   |   novel_recall |   known_attack_recall |   true_negative_rate |   overall_macro_f1 |   overall_mcc |   overall_fpr |
 |:--------------------|---------------:|----------------------:|---------------------:|-------------------:|--------------:|--------------:|
-| DoS                 |         0.0898 |                0.9901 |               0.9918 |             0.7853 |        0.6164 |        0.0082 |
-| DDoS                |         0.5001 |                0.9687 |               0.9873 |             0.9119 |        0.8271 |        0.0127 |
-| PortScan            |         0.1026 |                0.9784 |               0.9876 |             0.9719 |        0.9442 |        0.0124 |
-| Brute Force         |         0.0109 |                0.9786 |               0.988  |             0.9662 |        0.9324 |        0.012  |
-| Web Attack          |         0.0233 |                0.9797 |               0.9887 |             0.9738 |        0.9478 |        0.0113 |
+| DoS                 |         0.1724 |                0.9913 |               0.9956 |             0.8141 |        0.6703 |        0.0044 |
+| DDoS                |         0.4359 |                0.9755 |               0.9893 |             0.9077 |        0.8204 |        0.0107 |
+| PortScan            |         0.1667 |                0.9799 |               0.9899 |             0.9762 |        0.9525 |        0.0101 |
+| Brute Force         |         0      |                0.9813 |               0.9894 |             0.9691 |        0.9383 |        0.0106 |
+| Web Attack          |         0.0116 |                0.9851 |               0.9888 |             0.9755 |        0.9514 |        0.0112 |
 
 
-**Average novel-category recall:** 0.1453  
+**Average novel-category recall:** 0.1573  
 
-**Average recall on remaining known attacks:** 0.9791  
+**Average recall on remaining known attacks:** 0.9826  
 
-**Detection gap (known minus novel):** 0.8338
+**Detection gap (known minus novel):** 0.8253
 
 
 ## 6. Plots

@@ -5,4 +5,4 @@ Train size:      30000
 Val size:        44634
 Test size:       89268
 
-Hybrid best params: {'supervised_type': 'RandomForest', 'n_estimators': 400, 'max_depth': 40, 'nu_anomaly': 0.2, 'C_meta': 1.0}
+Hybrid best params: {'supervised_type': 'RandomForest', 'n_estimators': 400, 'max_depth': 40, 'nu_anomaly': 0.1, 'C_meta': 10.0}

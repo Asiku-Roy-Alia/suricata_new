@@ -1,7 +1,5 @@
 # Ubuntu VM Setup Guide
 
-This guide assumes you are connected to the Ubuntu VM through AnyDesk and can open a terminal inside the VM.
-
 ## 1. Confirm the VM has the expected project tools
 
 ```bash

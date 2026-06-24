@@ -1,15 +1,15 @@
 
 LinearSVC
                 pred_BENIGN  pred_ATTACK
-true_BENIGN            32800       43067
-true_ATTACK              222       13179
+true_BENIGN            24935       50932
+true_ATTACK              190       13211
 
 IsolationForest
                 pred_BENIGN  pred_ATTACK
-true_BENIGN            69836        6031
-true_ATTACK             3696        9705
+true_BENIGN            69337        6530
+true_ATTACK             3561        9840
 
 HybridStack
                 pred_BENIGN  pred_ATTACK
-true_BENIGN            74717        1150
-true_ATTACK              221       13180
+true_BENIGN            75034         833
+true_ATTACK              260       13141

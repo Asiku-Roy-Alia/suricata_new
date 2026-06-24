@@ -15,7 +15,7 @@ import {
   YAxis,
 } from "recharts";
 
-const ES_URL = process.env.REACT_APP_ES_URL || "http://localhost:9200";
+const ES_URL = process.env.REACT_APP_ES_URL || "";
 const ES_INDEX = process.env.REACT_APP_ES_INDEX || "hybrid-ids-decisions";
 const COLORS = {
   benign: "#16a34a",

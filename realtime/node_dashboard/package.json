@@ -16,5 +16,6 @@
     ">0.2%",
     "not dead",
     "not op_mini all"
-  ]
+  ],
+  "proxy": "http://elasticsearch:9200"
 }
